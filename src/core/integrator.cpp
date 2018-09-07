@@ -82,6 +82,42 @@ Spectrum UniformSampleAllLights(const Interaction &it, const Scene &scene,
     return L;
 }
 
+// This sampler returns the % of unobstructed light rays 
+Spectrum UniformSampleAllLightsShadow(const Interaction &it, const Scene &scene,
+				      MemoryArena &arena, Sampler &sampler,
+				      const std::vector<int> &nLightSamples,
+				      bool handleMedia) {
+    ProfilePhase p(Prof::DirectLighting);
+    Spectrum L(0.f);
+    for (size_t j = 0; j < scene.lights.size(); ++j) {
+        // Accumulate contribution of _j_th light to _L_
+        const std::shared_ptr<Light> &light = scene.lights[j];
+        int nSamples = nLightSamples[j];
+        const Point2f *uLightArray = sampler.Get2DArray(nSamples);
+        const Point2f *uScatteringArray = sampler.Get2DArray(nSamples);
+        if (!uLightArray || !uScatteringArray) {
+            // Use a single sample for illumination from _light_
+            Point2f uLight = sampler.Get2D();
+            Point2f uScattering = sampler.Get2D();
+            L += EstimateDirect(it, uScattering, *light, uLight, scene, sampler,
+                                arena, handleMedia);
+        } else {
+            // Estimate direct lighting using sample arrays
+            Spectrum Ld(0.f);
+            for (int k = 0; k < nSamples; ++k) {
+                Ld += EstimateDirect(it, uScatteringArray[k], *light,
+                                     uLightArray[k], scene, sampler, arena,
+                                     handleMedia);
+		if(!Ld.IsBlack()) {
+		    Ld = Spectrum(1.f);
+		}
+	    }
+            L += Ld / nSamples;
+        }
+    }
+    return L;
+}
+
 Spectrum UniformSampleOneLight(const Interaction &it, const Scene &scene,
                                MemoryArena &arena, Sampler &sampler,
                                bool handleMedia, const Distribution1D *lightDistrib) {

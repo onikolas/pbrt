@@ -61,6 +61,10 @@ Spectrum UniformSampleAllLights(const Interaction &it, const Scene &scene,
                                 MemoryArena &arena, Sampler &sampler,
                                 const std::vector<int> &nLightSamples,
                                 bool handleMedia = false);
+Spectrum UniformSampleAllLightsShadow(const Interaction &it, const Scene &scene,
+				      MemoryArena &arena, Sampler &sampler,
+				      const std::vector<int> &nLightSamples,
+				      bool handleMedia = false);
 Spectrum UniformSampleOneLight(const Interaction &it, const Scene &scene,
                                MemoryArena &arena, Sampler &sampler,
                                bool handleMedia = false,
