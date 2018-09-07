@@ -270,8 +270,8 @@ static RGBSpectrum *ReadImagePNG(const std::string &name, int *width,
 
     RGBSpectrum *ret = new RGBSpectrum[*width * *height];
     unsigned char *src = rgb;
-    for (int y = 0; y < h; ++y) {
-        for (int x = 0; x < w; ++x, src += 3) {
+    for (unsigned int y = 0; y < h; ++y) {
+        for (unsigned int x = 0; x < w; ++x, src += 3) {
             Float c[3];
             c[0] = src[0] / 255.f;
             c[1] = src[1] / 255.f;
@@ -303,7 +303,7 @@ static PBRT_CONSTEXPR bool hostLittleEndian =
   #endif
 #else
   #if defined(__LITTLE_ENDIAN__) || defined(__i386__) || defined(__x86_64__) || \
-      defined(WIN32)
+      defined(_WIN32) || defined(WIN32)
     true
   #elif defined(__BIG_ENDIAN__)
     false

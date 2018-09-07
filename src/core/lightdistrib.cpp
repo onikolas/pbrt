@@ -38,6 +38,7 @@
 #include "parallel.h"
 #include "scene.h"
 #include "stats.h"
+#include "integrator.h"
 #include <numeric>
 
 namespace pbrt {
@@ -66,7 +67,7 @@ std::unique_ptr<LightDistribution> CreateLightSampleDistribution(
 
 UniformLightDistribution::UniformLightDistribution(const Scene &scene) {
     std::vector<Float> prob(scene.lights.size(), Float(1));
-    distrib.reset(new Distribution1D(&prob[0], prob.size()));
+    distrib.reset(new Distribution1D(&prob[0], int(prob.size())));
 }
 
 const Distribution1D *UniformLightDistribution::Lookup(const Point3f &p) const {
@@ -295,7 +296,7 @@ SpatialLightDistribution::ComputeDistribution(Point3i pi) const {
         ", avgContrib = " << avgContrib;
 
     // Compute a sampling distribution from the accumulated contributions.
-    return new Distribution1D(&lightContrib[0], lightContrib.size());
+    return new Distribution1D(&lightContrib[0], int(lightContrib.size()));
 }
 
 }  // namespace pbrt

@@ -35,50 +35,37 @@
 #pragma once
 #endif
 
-#ifndef PBRT_CORE_SCENE_H
-#define PBRT_CORE_SCENE_H
+#ifndef PBRT_TEXTURES_PTEX_H
+#define PBRT_TEXTURES_PTEX_H
 
-// core/scene.h*
+// textures/ptex.h*
 #include "pbrt.h"
-#include "geometry.h"
-#include "primitive.h"
-#include "light.h"
+#include "texture.h"
+
+#include <string>
 
 namespace pbrt {
 
-// Scene Declarations
-class Scene {
+// PtexTexture Declarations
+template <typename T>
+class PtexTexture : public Texture<T> {
   public:
-    // Scene Public Methods
-    Scene(std::shared_ptr<Primitive> aggregate,
-          const std::vector<std::shared_ptr<Light>> &lights)
-        : lights(lights), aggregate(aggregate) {
-        // Scene Constructor Implementation
-        worldBound = aggregate->WorldBound();
-        for (const auto &light : lights) {
-            light->Preprocess(*this);
-            if (light->flags & (int)LightFlags::Infinite)
-                infiniteLights.push_back(light);
-        }
-    }
-    const Bounds3f &WorldBound() const { return worldBound; }
-    bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
-    bool IntersectP(const Ray &ray) const;
-    bool IntersectTr(Ray ray, Sampler &sampler, SurfaceInteraction *isect,
-                     Spectrum *transmittance) const;
-
-    // Scene Public Data
-    std::vector<std::shared_ptr<Light>> lights;
-    // Store infinite light sources separately for cases where we only want
-    // to loop over them.
-    std::vector<std::shared_ptr<Light>> infiniteLights;
+    // PtexTexture Public Methods
+    PtexTexture(const std::string &filename, Float gamma);
+    ~PtexTexture();
+    T Evaluate(const SurfaceInteraction &) const;
 
   private:
-    // Scene Private Data
-    std::shared_ptr<Primitive> aggregate;
-    Bounds3f worldBound;
+    bool valid;
+    const std::string filename;
+    const Float gamma;
 };
+
+PtexTexture<Float> *CreatePtexFloatTexture(const Transform &tex2world,
+                                           const TextureParams &tp);
+PtexTexture<Spectrum> *CreatePtexSpectrumTexture(const Transform &tex2world,
+                                                 const TextureParams &tp);
 
 }  // namespace pbrt
 
-#endif  // PBRT_CORE_SCENE_H
+#endif  // PBRT_TEXTURES_PTEX_H
