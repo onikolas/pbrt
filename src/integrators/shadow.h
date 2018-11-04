@@ -8,18 +8,18 @@
 #pragma once
 #endif
 
-#ifndef PBRT_INTEGRATORS_SHADOWG_H
+#ifndef PBRT_INTEGRATORS_SHADOW_H
 #define PBRT_INTEGRATORS_SHADOW_H
 
 // integrators/shadow.h*
 #include "pbrt.h"
 #include "integrator.h"
 #include "scene.h"
+#include "directlighting.h"
 
 namespace pbrt {
 
-// LightStrategy Declarations
-enum class LightStrategy { UniformSampleAll, UniformSampleOne };
+
 
 // ShadowIntegrator Declarations
 class ShadowIntegrator : public SamplerIntegrator {

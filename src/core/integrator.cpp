@@ -82,6 +82,37 @@ Spectrum UniformSampleAllLights(const Interaction &it, const Scene &scene,
     return L;
 }
 
+Spectrum UniformSampleAllLightsIllum(const Interaction &it, const Scene &scene,
+                                MemoryArena &arena, Sampler &sampler,
+                                const std::vector<int> &nLightSamples,
+                                bool handleMedia) {
+    ProfilePhase p(Prof::DirectLighting);
+    Spectrum L(0.f);
+    for (size_t j = 0; j < scene.lights.size(); ++j) {
+        // Accumulate contribution of _j_th light to _L_
+        const std::shared_ptr<Light> &light = scene.lights[j];
+        int nSamples = nLightSamples[j];
+        const Point2f *uLightArray = sampler.Get2DArray(nSamples);
+        const Point2f *uScatteringArray = sampler.Get2DArray(nSamples);
+        if (!uLightArray || !uScatteringArray) {
+            // Use a single sample for illumination from _light_
+            Point2f uLight = sampler.Get2D();
+            Point2f uScattering = sampler.Get2D();
+            L += EstimateDirectIllum(it, uScattering, *light, uLight, scene, sampler,
+                                arena, handleMedia);
+        } else {
+            // Estimate direct lighting using sample arrays
+            Spectrum Ld(0.f);
+            for (int k = 0; k < nSamples; ++k)
+                Ld += EstimateDirectIllum(it, uScatteringArray[k], *light,
+                                     uLightArray[k], scene, sampler, arena,
+                                     handleMedia);
+            L += Ld / nSamples;
+        }
+    }
+    return L;
+}
+
 // This sampler returns the % of unobstructed light rays 
 Spectrum UniformSampleAllLightsShadow(const Interaction &it, const Scene &scene,
 				      MemoryArena &arena, Sampler &sampler,
@@ -115,7 +146,7 @@ Spectrum UniformSampleAllLightsShadow(const Interaction &it, const Scene &scene,
             L += Ld / nSamples;
         }
     }
-    return L;
+    return L/scene.lights.size();
 }
 
 Spectrum UniformSampleOneLight(const Interaction &it, const Scene &scene,
@@ -249,6 +280,94 @@ Spectrum EstimateDirect(const Interaction &it, const Point2f &uScattering,
     }
     return Ld;
 }
+    
+Spectrum EstimateDirectIllum(const Interaction &it, const Point2f &uScattering,
+                        const Light &light, const Point2f &uLight,
+                        const Scene &scene, Sampler &sampler,
+                        MemoryArena &arena, bool handleMedia, bool specular) {
+    BxDFType bsdfFlags =
+        specular ? BSDF_ALL : BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
+    Spectrum Ld(0.f);
+    // Sample light source with multiple importance sampling
+    Vector3f wi;
+    Float lightPdf = 0, scatteringPdf = 0;
+    VisibilityTester visibility;
+    Spectrum Li = light.Sample_Li(it, uLight, &wi, &lightPdf, &visibility);
+    VLOG(2) << "EstimateDirect uLight:" << uLight << " -> Li: " << Li << ", wi: "
+            << wi << ", pdf: " << lightPdf;
+    if (lightPdf > 0 && !Li.IsBlack()) {
+        
+	// Compute effect of visibility for light source sample
+	if (handleMedia) {
+	    Li *= visibility.Tr(scene, sampler);
+	    VLOG(2) << "  after Tr, Li: " << Li;
+	} else {
+	    if (!visibility.Unoccluded(scene)) {
+                VLOG(2) << "  shadow ray blocked";
+                Li = Spectrum(0.f);
+	    } else
+                VLOG(2) << "  shadow ray unoccluded";
+	}
+
+	// Add light's contribution to reflected radiance
+	if (!Li.IsBlack()) {
+	    if (IsDeltaLight(light.flags))
+		Ld += Li / lightPdf;
+	    else {
+		Float weight =
+		    PowerHeuristic(1, lightPdf, 1, scatteringPdf);
+		Ld +=  Li * weight / lightPdf;
+	    }
+	}
+    }
+    
+
+    // Sample BSDF with multiple importance sampling
+    if (!IsDeltaLight(light.flags)) {
+        Spectrum f;
+        bool sampledSpecular = false;
+        if (it.IsSurfaceInteraction()) {
+            // Sample scattered direction for surface interactions
+            BxDFType sampledType;
+            const SurfaceInteraction &isect = (const SurfaceInteraction &)it;
+            f = isect.bsdf->Sample_f(isect.wo, &wi, uScattering, &scatteringPdf,
+                                     bsdfFlags, &sampledType);
+            f *= AbsDot(wi, isect.shading.n);
+            sampledSpecular = (sampledType & BSDF_SPECULAR) != 0;
+        } else {
+            // Sample scattered direction for medium interactions
+            const MediumInteraction &mi = (const MediumInteraction &)it;
+            Float p = mi.phase->Sample_p(mi.wo, &wi, uScattering);
+            f = Spectrum(p);
+            scatteringPdf = p;
+        }
+        VLOG(2) << "  BSDF / phase sampling f: " << f << ", scatteringPdf: " <<
+            scatteringPdf;
+        if (!f.IsBlack() && scatteringPdf > 0) {
+            // Account for light contributions along sampled direction _wi_
+            Float weight = 1;
+
+            // Find intersection and compute transmittance
+            SurfaceInteraction lightIsect;
+            Ray ray = it.SpawnRay(wi);
+            Spectrum Tr(1.f);
+            bool foundSurfaceInteraction =
+                handleMedia ? scene.IntersectTr(ray, sampler, &lightIsect, &Tr)
+                            : scene.Intersect(ray, &lightIsect);
+
+            // Add light contribution from material sampling
+            Spectrum Li(0.f);
+            if (foundSurfaceInteraction) {
+                if (lightIsect.primitive->GetAreaLight() == &light)
+                    Li = lightIsect.Le(-wi);
+            } else
+                Li = light.Le(ray);
+            if (!Li.IsBlack()) Ld += Li * Tr * weight / scatteringPdf;
+        }
+    }
+    return Ld;
+}
+
 
 std::unique_ptr<Distribution1D> ComputeLightPowerDistribution(
     const Scene &scene) {

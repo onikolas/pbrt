@@ -54,6 +54,8 @@
 #include "filters/triangle.h"
 #include "integrators/bdpt.h"
 #include "integrators/directlighting.h"
+#include "integrators/shadow.h"
+#include "integrators/illum.h"
 #include "integrators/mlt.h"
 #include "integrators/ao.h"
 #include "integrators/path.h"
@@ -1683,6 +1685,12 @@ Integrator *RenderOptions::MakeIntegrator() const {
     else if (IntegratorName == "directlighting")
         integrator =
             CreateDirectLightingIntegrator(IntegratorParams, sampler, camera);
+    else if (IntegratorName == "shadow")
+        integrator = CreateShadowIntegrator(IntegratorParams, sampler, camera);
+
+    else if (IntegratorName == "illum")
+        integrator = CreateIllumIntegrator(IntegratorParams, sampler, camera);
+    
     else if (IntegratorName == "path")
         integrator = CreatePathIntegrator(IntegratorParams, sampler, camera);
     else if (IntegratorName == "volpath")
